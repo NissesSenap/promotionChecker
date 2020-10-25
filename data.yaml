@@ -1,0 +1,8 @@
+---
+containers:
+  - repo: repo1
+    image: app1
+    webhook: http://localhost:8081/webhook
+  - repo: repo2
+    image: app2
+    webhook: http://localhost:8081/webhook
