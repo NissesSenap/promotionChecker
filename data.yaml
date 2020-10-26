@@ -1,5 +1,7 @@
 ---
 artifactoryURL: http://localhost:8081
+# artifactoryAPIkey: myAPIkey
+# artifactoryUSER: myUSER
 pollTime: 10
 httpTimeout: 3
 

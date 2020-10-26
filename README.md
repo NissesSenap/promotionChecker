@@ -101,3 +101,4 @@ In no particular order.
     - If so we can save the data in a file/in a memory db.
 - Create a basic k8s deployment file
 - Write a example trigger binding for tekton
+- Support artifactory header and manage API key and username

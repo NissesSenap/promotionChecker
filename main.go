@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -36,18 +37,18 @@ type Item struct {
 }
 
 type Items struct {
-	Containers     []Item `containers`
-	ArtifactoryURL string `artifactoryURL`
-	pollTime       int
-	httpTimeout    int
+	Containers        []Item `containers`
+	ArtifactoryURL    string `artifactoryURL`
+	ArtifactoryAPIkey string `artifactoryAPIkey`
+	ArtifactoryUSER   string `artifactoryUSER`
+	pollTime          int
+	httpTimeout       int
 }
 
 func main() {
+	filename := getEnv("CONFIGFILE", "data.yaml")
+
 	var item Items
-
-	filename := "data.yaml"
-
-	fmt.Println(item.ArtifactoryURL)
 
 	// Read the config file
 	source, err := ioutil.ReadFile(filename)
@@ -60,6 +61,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
+
+	/* Check if env ARTIFACTORYAPIKEY got a value
+	If != "" overwrite the value in item.ArtifactoryAPIkey
+	This way env variable allways trumps the config.
+	But we can have a config file if we want.
+	*/
+	apiKEY := getEnv("ARTIFACTORYAPIKEY", "")
+	if apiKEY != "" {
+		item.ArtifactoryAPIkey = apiKEY
+	}
+
+	apiUSER := getEnv("ARTIFACTORYUSER", "")
+	if apiUSER != "" {
+		item.ArtifactoryUSER = apiUSER
+	}
+
+	fmt.Println(item.ArtifactoryURL)
 
 	fmt.Printf("--- config:\n%v\n\n", item)
 
@@ -79,8 +97,20 @@ func runner(item *Items, client *http.Client) {
 		repo := item.Containers[i].Repo
 		fmt.Println(webhook, image, repo)
 
+		fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+
+		req, _ := http.NewRequest("GET", fulURL, nil)
+
+		// Depending on config use BasicAuth, header or nothing
+		if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
+			req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
+		} else if item.ArtifactoryAPIkey != "" {
+			req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+		}
+
 		// Perform GET to URI
-		res, err := client.Get(item.ArtifactoryURL + "/api/storage/" + repo + "/" + image)
+		res, err := client.Do(req)
+
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -122,4 +152,15 @@ func runner(item *Items, client *http.Client) {
 			}
 		}
 	}
+}
+
+// getEnv get key environment variable if exist otherwise return defalutValue
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		fmt.Println("In getEnv")
+		fmt.Println(value)
+		return value
+		// TODO add a log debug here and print the value
+	}
+	return defaultValue
 }

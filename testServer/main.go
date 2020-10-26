@@ -67,6 +67,7 @@ func tags(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(myTags)
 
+	fmt.Println(r.Header)
 	js, err := json.Marshal(myTags)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
