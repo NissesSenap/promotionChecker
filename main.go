@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NissesSenap/promotionChecker/promoter"
+	mdb "github.com/NissesSenap/promotionChecker/repository/hmemdb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -87,6 +89,7 @@ func main() {
 
 	fmt.Printf("--- config:\n%v\n\n", item)
 
+	repo := chooseRepo("repo", 3)
 	// Create the http client
 	// Notice the time.Duration
 	client := &http.Client{
@@ -96,8 +99,13 @@ func main() {
 	// Create base context
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create the memory db
+	service := promoter.NewRedirectService(repo)
+
+	// hmemdbRepo.Store("repo1/app1", "repo1", "app1", []string{"v1.0.0", "v2.0.0"})
+
 	// goroutine start the infinate runner function
-	go runner(ctx, &item, client)
+	go runner(ctx, &item, client, service)
 
 	// Create a channel that listens for SIGTERM
 	signalCh := make(chan os.Signal, 1)
@@ -110,10 +118,16 @@ func main() {
 
 	// Handle potential shutdown like shuting down DB connections
 	fmt.Println("*********************************\nShutdown signal received\n*********************************")
+	tags, err := service.Read("repo1/app1")
+	if err != nil {
+		fmt.Println("Unable to find the repoImage")
+	}
+	fmt.Printf("Here is the tags %v", tags)
+
 	cancel()
 }
 
-func runner(ctx context.Context, item *Items, client *http.Client) {
+func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -179,6 +193,25 @@ func runner(ctx context.Context, item *Items, client *http.Client) {
 					if err != nil {
 						fmt.Println(err)
 					}
+
+					// Update db with info
+					repoImage := repo + "/" + image
+
+					// TODO remove bellow
+					hmemdbRepo.Store(repoImage, repo, image, []string{realTag})
+					tags, err := hmemdbRepo.Read(repoImage)
+					if err != nil {
+						fmt.Println("Unable to find the repoImage")
+					}
+					fmt.Printf("Here is the tags %v", tags)
+
+					// Update db with info
+					/*
+						err = promoter.UpdateTags(repoImage, repo, image, []string{realTag}, hmemdbRepo)
+						if err != nil {
+							log.Fatal("Unable to store things in the memDB")
+						}
+					*/
 				}
 			}
 
@@ -197,4 +230,16 @@ func getEnv(key, defaultValue string) string {
 		// TODO add a log debug here and print the value
 	}
 	return defaultValue
+}
+
+func chooseRepo(tableName string, timeout int) promoter.RedirectRepository {
+	switch os.Getenv("URL_DB") {
+	case "memDB":
+		repo, err := mdb.NewMemDBRepository(tableName, timeout)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return repo
+	}
+	return nil
 }
