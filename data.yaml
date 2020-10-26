@@ -1,4 +1,8 @@
 ---
+artifactoryURL: http://localhost:8081
+pollTime: 10
+httpTimeout: 3
+
 containers:
   - repo: repo1
     image: app1

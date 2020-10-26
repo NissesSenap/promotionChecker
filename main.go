@@ -29,25 +29,25 @@ type Children struct {
 	Folder bool
 }
 
+type Item struct {
+	Repo    string
+	Image   string
+	Webhook string
+}
+
+type Items struct {
+	Containers     []Item `containers`
+	ArtifactoryURL string `artifactoryURL`
+	pollTime       int
+	httpTimeout    int
+}
+
 func main() {
-	type Item struct {
-		Repo    string
-		Image   string
-		Webhook string
-	}
-
-	type Items struct {
-		Containers []Item `containers`
-	}
-
 	var item Items
 
-	// TODO migrate to a config file/env
-	ArtifactoryURI := "http://localhost:8081" // artifactory URI
-	// pollTime := 10 // How often to poll the homepage
 	filename := "data.yaml"
 
-	fmt.Println(ArtifactoryURI)
+	fmt.Println(item.ArtifactoryURL)
 
 	// Read the config file
 	source, err := ioutil.ReadFile(filename)
@@ -62,56 +62,64 @@ func main() {
 	}
 
 	fmt.Printf("--- config:\n%v\n\n", item)
-	// TODO change to loop
-	webhook := item.Containers[0].Webhook
-	image := item.Containers[0].Image
-	repo := item.Containers[0].Repo
-	fmt.Println(webhook, image, repo)
 
 	// Create the http client
+	// Notice the time.Duration
 	client := &http.Client{
-		Timeout: time.Second * 3,
+		Timeout: time.Second * time.Duration(item.httpTimeout),
 	}
+	runner(&item, client)
+}
 
-	// Perform GET to URI
-	// TODO change from the hardcoded repo1/app1
-	res, err := client.Get(ArtifactoryURI + "/api/storage/repo1/app1")
-	if err != nil {
-		fmt.Println(err)
+func runner(item *Items, client *http.Client) {
+	for i := range item.Containers {
+
+		webhook := item.Containers[i].Webhook
+		image := item.Containers[i].Image
+		repo := item.Containers[i].Repo
+		fmt.Println(webhook, image, repo)
+
+		// Perform GET to URI
+		res, err := client.Get(item.ArtifactoryURL + "/api/storage/" + repo + "/" + image)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if res.Body != nil {
+			defer res.Body.Close()
+		}
+
+		body, readErr := ioutil.ReadAll(res.Body)
+		if readErr != nil {
+			log.Fatal(readErr)
+		}
+
+		tag := Tags{}
+
+		// Unmarshal the data
+		jsonErr := json.Unmarshal(body, &tag)
+		if jsonErr != nil {
+			log.Fatal(jsonErr)
+		}
+
+		// Go through all the tags
+		// TODO add a comparision if these tags already exist
+		for f := range tag.Children {
+			// The [1:] slices the first letter from realTag, in this case remove /
+			realTag := tag.Children[f].URI[1:]
+			fmt.Println(realTag)
+
+			// Post to the webhook endpoint
+			webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
+			jsonValue, err := json.Marshal(webhookValues)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
 	}
-
-	if res.Body != nil {
-		defer res.Body.Close()
-	}
-
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		log.Fatal(readErr)
-	}
-
-	tag := Tags{}
-
-	// Unmarshal the data
-	jsonErr := json.Unmarshal(body, &tag)
-	if jsonErr != nil {
-		log.Fatal(jsonErr)
-	}
-	// Currently using [0]
-	// TODO fix in to a loop
-	// The [1:] slices the first letter from realTag, in this case remove /
-	realTag := tag.Children[0].URI[1:]
-	fmt.Println(realTag)
-
-	// Post to the webhook endpoint
-	webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
-	jsonValue, err := json.Marshal(webhookValues)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
-	if err != nil {
-		fmt.Println(err)
-	}
-
 }
