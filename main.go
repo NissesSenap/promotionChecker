@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -44,6 +47,9 @@ type Items struct {
 	PollTime          int    `pollTime`
 	HTTPtimeout       int    `httpTimeout`
 }
+
+// Create channel for ctx
+var c = make(chan int)
 
 func main() {
 	filename := getEnv("CONFIGFILE", "data.yaml")
@@ -86,76 +92,99 @@ func main() {
 	client := &http.Client{
 		Timeout: time.Second * time.Duration(item.HTTPtimeout),
 	}
-	runner(&item, client)
+
+	// Create base context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// goroutine start the infinate runner function
+	go runner(ctx, &item, client)
+
+	// Create a channel that listens for SIGTERM
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case <-signalCh:
+	case <-ctx.Done():
+	}
+
+	// Handle potential shutdown like shuting down DB connections
+	fmt.Println("*********************************\nShutdown signal received\n*********************************")
+	cancel()
 }
 
-func runner(item *Items, client *http.Client) {
+func runner(ctx context.Context, item *Items, client *http.Client) {
 	for {
-		for i := range item.Containers {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			for i := range item.Containers {
 
-			webhook := item.Containers[i].Webhook
-			image := item.Containers[i].Image
-			repo := item.Containers[i].Repo
-			fmt.Println(webhook, image, repo)
+				webhook := item.Containers[i].Webhook
+				image := item.Containers[i].Image
+				repo := item.Containers[i].Repo
+				fmt.Println(webhook, image, repo)
 
-			fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+				fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
-			req, _ := http.NewRequest("GET", fulURL, nil)
+				req, _ := http.NewRequest("GET", fulURL, nil)
 
-			// Depending on config use BasicAuth, header or nothing
-			if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-				req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-			} else if item.ArtifactoryAPIkey != "" {
-				req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
-			}
+				// Depending on config use BasicAuth, header or nothing
+				if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
+					req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
+				} else if item.ArtifactoryAPIkey != "" {
+					req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+				}
 
-			// Perform GET to URI
-			res, err := client.Do(req)
+				// Perform GET to URI
+				res, err := client.Do(req)
 
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			if res.Body != nil {
-				defer res.Body.Close()
-			}
-
-			body, readErr := ioutil.ReadAll(res.Body)
-			if readErr != nil {
-				log.Fatal(readErr)
-			}
-
-			tag := Tags{}
-
-			// Unmarshal the data
-			jsonErr := json.Unmarshal(body, &tag)
-			if jsonErr != nil {
-				log.Fatal(jsonErr)
-			}
-
-			// Go through all the tags
-			// TODO add a comparision if these tags already exist
-			for f := range tag.Children {
-				// The [1:] slices the first letter from realTag, in this case remove /
-				realTag := tag.Children[f].URI[1:]
-				fmt.Println(realTag)
-
-				// Post to the webhook endpoint
-				webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
-				jsonValue, err := json.Marshal(webhookValues)
 				if err != nil {
 					fmt.Println(err)
 				}
 
-				_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
-				if err != nil {
-					fmt.Println(err)
+				if res.Body != nil {
+					defer res.Body.Close()
+				}
+
+				body, readErr := ioutil.ReadAll(res.Body)
+				if readErr != nil {
+					log.Fatal(readErr)
+				}
+
+				tag := Tags{}
+
+				// Unmarshal the data
+				jsonErr := json.Unmarshal(body, &tag)
+				if jsonErr != nil {
+					log.Fatal(jsonErr)
+				}
+
+				// Go through all the tags
+				// TODO add a comparision if these tags already exist
+				for f := range tag.Children {
+					// The [1:] slices the first letter from realTag, in this case remove /
+					realTag := tag.Children[f].URI[1:]
+					fmt.Println(realTag)
+
+					// Post to the webhook endpoint
+					webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
+					jsonValue, err := json.Marshal(webhookValues)
+					if err != nil {
+						fmt.Println(err)
+					}
+
+					_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+					if err != nil {
+						fmt.Println(err)
+					}
 				}
 			}
+
+			// Sleep for the next pollTime
+			time.Sleep(time.Second * time.Duration(item.PollTime))
 		}
-
-		// Sleep for the next pollTime
-		time.Sleep(time.Second * time.Duration(item.PollTime))
 	}
 }
 
