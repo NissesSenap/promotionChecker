@@ -90,70 +90,73 @@ func main() {
 }
 
 func runner(item *Items, client *http.Client) {
-	for i := range item.Containers {
+	for {
+		for i := range item.Containers {
 
-		webhook := item.Containers[i].Webhook
-		image := item.Containers[i].Image
-		repo := item.Containers[i].Repo
-		fmt.Println(webhook, image, repo)
+			webhook := item.Containers[i].Webhook
+			image := item.Containers[i].Image
+			repo := item.Containers[i].Repo
+			fmt.Println(webhook, image, repo)
 
-		fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+			fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
-		req, _ := http.NewRequest("GET", fulURL, nil)
+			req, _ := http.NewRequest("GET", fulURL, nil)
 
-		// Depending on config use BasicAuth, header or nothing
-		if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-			req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-		} else if item.ArtifactoryAPIkey != "" {
-			req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
-		}
+			// Depending on config use BasicAuth, header or nothing
+			if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
+				req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
+			} else if item.ArtifactoryAPIkey != "" {
+				req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+			}
 
-		// Perform GET to URI
-		res, err := client.Do(req)
+			// Perform GET to URI
+			res, err := client.Do(req)
 
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		if res.Body != nil {
-			defer res.Body.Close()
-		}
-
-		body, readErr := ioutil.ReadAll(res.Body)
-		if readErr != nil {
-			log.Fatal(readErr)
-		}
-
-		tag := Tags{}
-
-		// Unmarshal the data
-		jsonErr := json.Unmarshal(body, &tag)
-		if jsonErr != nil {
-			log.Fatal(jsonErr)
-		}
-
-		// Go through all the tags
-		// TODO add a comparision if these tags already exist
-		for f := range tag.Children {
-			// The [1:] slices the first letter from realTag, in this case remove /
-			realTag := tag.Children[f].URI[1:]
-			fmt.Println(realTag)
-
-			// Post to the webhook endpoint
-			webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
-			jsonValue, err := json.Marshal(webhookValues)
 			if err != nil {
 				fmt.Println(err)
 			}
 
-			_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
-			if err != nil {
-				fmt.Println(err)
+			if res.Body != nil {
+				defer res.Body.Close()
+			}
+
+			body, readErr := ioutil.ReadAll(res.Body)
+			if readErr != nil {
+				log.Fatal(readErr)
+			}
+
+			tag := Tags{}
+
+			// Unmarshal the data
+			jsonErr := json.Unmarshal(body, &tag)
+			if jsonErr != nil {
+				log.Fatal(jsonErr)
+			}
+
+			// Go through all the tags
+			// TODO add a comparision if these tags already exist
+			for f := range tag.Children {
+				// The [1:] slices the first letter from realTag, in this case remove /
+				realTag := tag.Children[f].URI[1:]
+				fmt.Println(realTag)
+
+				// Post to the webhook endpoint
+				webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
+				jsonValue, err := json.Marshal(webhookValues)
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+				if err != nil {
+					fmt.Println(err)
+				}
 			}
 		}
+
+		// Sleep for the next pollTime
+		time.Sleep(time.Second * time.Duration(item.PollTime))
 	}
-
-	// time.Sleep(time.Second * time.Duration(item.PollTime))
 }
 
 // getEnv get key environment variable if exist otherwise return defalutValue
