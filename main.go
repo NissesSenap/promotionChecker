@@ -41,8 +41,8 @@ type Items struct {
 	ArtifactoryURL    string `artifactoryURL`
 	ArtifactoryAPIkey string `artifactoryAPIkey`
 	ArtifactoryUSER   string `artifactoryUSER`
-	pollTime          int
-	httpTimeout       int
+	PollTime          int    `pollTime`
+	HTTPtimeout       int    `httpTimeout`
 }
 
 func main() {
@@ -84,7 +84,7 @@ func main() {
 	// Create the http client
 	// Notice the time.Duration
 	client := &http.Client{
-		Timeout: time.Second * time.Duration(item.httpTimeout),
+		Timeout: time.Second * time.Duration(item.HTTPtimeout),
 	}
 	runner(&item, client)
 }
@@ -152,6 +152,8 @@ func runner(item *Items, client *http.Client) {
 			}
 		}
 	}
+
+	// time.Sleep(time.Second * time.Duration(item.PollTime))
 }
 
 // getEnv get key environment variable if exist otherwise return defalutValue
