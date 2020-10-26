@@ -12,6 +12,15 @@ I will do some specific coding for artifactory but it shouldn't be hard to adopt
 If you don't have a JFrog artifactory with pro license sitting around you can start a [test subscription](https://jfrog.com/artifactory/start-free/).
 Sadly the open-source version of artifactory isn't enough due to the rest API.
 
+### Issues with Artifactory rest API
+
+Don't know if it's due to test license or if it's due to only using a pro license but I can't get any rest API queries to work.
+I have created a JIRA ticket with Artifactory about this to get a clarification.
+
+In the mean time I have created a simple testServer looking on how the data looked like in artifactory 6.something.
+
+Check out [testerServer](testServer/main.go) and run it with `go run main.go` from the testServer folder.
+
 ### Start artifactory
 
 For instructions on how to start artifactory see [here](https://jfrog.com/artifactory/install/)
@@ -87,18 +96,15 @@ curl -H "X-JFrog-Art-Api:$APIKEY" -X GET http://localhost:8081/api/docker/repo1/
 
 In no particular order.
 
-- Fix the general loops needed
 - Refactor to look nicer
-- Store all the data in something like a db or file.
+- Store all the data in something like a db or file
+  - Currently points towards [go-memdb](https://github.com/hashicorp/go-memdb)
 - Write a container file
 - Create some metrics
-- If speed is needed create channels
-- Manage SIGTERM
-- Use external config files/env
-- During the initial start check if there is missing values in the DB.
-  - Is it okay that we trigger all the jobs at startup?
-  - Should we just make a list of everything currently available and start nothing. This will make it possible to miss triggers.
-    - If so we can save the data in a file/in a memory db.
+- If speed is needed create channels to perform the API requests
+- Currently assume that it's okay that I have missed updates in the repos
+  - At startup create a status of the current env and save in the DB.
+  - From there start creating webhooks depending on new changes to the repos
 - Create a basic k8s deployment file
 - Write a example trigger binding for tekton
-- Support artifactory header and manage API key and username
+- Use log everywhere instead of print
