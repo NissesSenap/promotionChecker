@@ -48,6 +48,7 @@ type Items struct {
 	ArtifactoryUSER   string `artifactoryUSER`
 	PollTime          int    `pollTime`
 	HTTPtimeout       int    `httpTimeout`
+	DBType            string `dbType`
 }
 
 // Create channel for ctx
@@ -89,7 +90,12 @@ func main() {
 
 	fmt.Printf("--- config:\n%v\n\n", item)
 
-	repo := chooseRepo("repo", 3)
+	/* Choose what kind of database that we should use
+	Currently only memDB is supported
+	*/
+	// TODO perfrom a ENUM check on item.DBType
+	repo := chooseRepo("repo", 3, item.DBType)
+
 	// Create the http client
 	// Notice the time.Duration
 	client := &http.Client{
@@ -232,8 +238,8 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func chooseRepo(tableName string, timeout int) promoter.RedirectRepository {
-	switch os.Getenv("URL_DB") {
+func chooseRepo(tableName string, timeout int, dbType string) promoter.RedirectRepository {
+	switch dbType {
 	case "memDB":
 		repo, err := mdb.NewMemDBRepository(tableName, timeout)
 		if err != nil {

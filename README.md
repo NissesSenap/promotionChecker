@@ -99,6 +99,7 @@ In no particular order.
 - Refactor to look nicer
 - Store all the data in something like a db or file
   - Currently points towards [go-memdb](https://github.com/hashicorp/go-memdb)
+  - Currently there is only one value tag saved in the DB. Use the UpdateTags in logic.go
 - Write a container file
 - Create some metrics
 - If speed is needed create channels to perform the API requests
