@@ -108,8 +108,6 @@ func main() {
 	// Create the memory db
 	service := promoter.NewRedirectService(repo)
 
-	// hmemdbRepo.Store("repo1/app1", "repo1", "app1", []string{"v1.0.0", "v2.0.0"})
-
 	// Start the initial function that adds the current info to the memDB
 	initialRunner(&item, client, service)
 
@@ -206,7 +204,6 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 						fmt.Println("WE HAVE FOUND A NEW TAG")
 						fmt.Println(realTag)
 
-						// TODO add check to see if we got any new tag. Else don't send the webhook nor update the DB
 						// Post to the webhook endpoint
 						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
 						jsonValue, err := json.Marshal(webhookValues)
@@ -225,6 +222,8 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 						if err != nil {
 							log.Fatal("Unable to store things in the memDB")
 						}
+
+						// Verify the existing tags
 						tags, err := hmemdbRepo.Read(repoImage)
 						if err != nil {
 							fmt.Println("Unable to find the repoImage")

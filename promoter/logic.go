@@ -14,7 +14,7 @@ func (r *redirectService) UpdateTags(repoImage string, repo string, image string
 	return r.redirectRepo.UpdateTags(repoImage, repo, image, newTags)
 }
 
-func (r *redirectService) Store(repoImage string, artrepo string, image string, tags []string) (*Repos, error) {
+func (r *redirectService) Store(repoImage string, artrepo string, image string, tags []string) error {
 
 	return r.redirectRepo.Store(repoImage, artrepo, image, tags)
 }
