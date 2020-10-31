@@ -15,18 +15,6 @@ type memDBRepository struct {
 }
 
 func newMemDBClient(schema *memdb.DBSchema, txnTimeout int) (*memdb.MemDB, error) {
-	/*
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(mongoTimeout)*time.Second)
-		defer cancel()
-		client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURL))
-		if err != nil {
-			return nil, err
-		}
-		err = client.Ping(ctx, readpref.Primary())
-		if err != nil {
-			return nil, err
-		}
-	*/
 	// Create a new data base
 	db, err := memdb.NewMemDB(schema)
 	if err != nil {
@@ -67,44 +55,6 @@ func NewMemDBRepository(tableName string, timeout int) (promoter.RedirectReposit
 	return repo, nil
 }
 
-func (r *memDBRepository) StartupUpdate(repoImage string, artrepo string, image string, tags []string) (*promoter.Repos, error) {
-
-	// Insert multiple things at the same time.
-	// Create a write transaction
-	txn := r.client.Txn(true)
-
-	// Insert some repo
-	repo := []*promoter.Repos{
-		&promoter.Repos{"repo1/app1", "repo1", "app1", []string{"v1.0.0", "v2.0.0"}},
-		&promoter.Repos{"repo2/app2", "repo2", "app2", []string{"SNAPSHOT-1", "123456"}},
-		&promoter.Repos{"repo2/app3", "repo2", "app3", []string{"SNAPSHOT-2", "567890"}},
-	}
-
-	for _, r := range repo {
-		if err := txn.Insert("repo", r); err != nil {
-			panic(err)
-		}
-	}
-
-	// Commit the transaction
-	txn.Commit()
-
-	// Create read-only transaction
-	txn = r.client.Txn(false)
-	defer txn.Abort()
-
-	// Lookup by email
-	raw, err := txn.First("repo", "id", "repo2/app2")
-	if err != nil {
-		panic(err)
-	}
-
-	// Say hi!
-	fmt.Printf("Hello %s!\n", raw.(*promoter.Repos).Image)
-
-	return nil, nil
-}
-
 func (r *memDBRepository) Store(repoImage string, artrepo string, image string, tags []string) (*promoter.Repos, error) {
 	// Create a write transaction
 	txn := r.client.Txn(true)
@@ -140,10 +90,11 @@ func (r *memDBRepository) Read(repoImage string) ([]string, error) {
 	txn := r.client.Txn(false)
 	defer txn.Abort()
 
+	fmt.Println("I'm in read")
 	// Lookup by repoImage
 	raw, err := txn.First(r.tableName, "id", repoImage)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// Say hi!
@@ -151,6 +102,26 @@ func (r *memDBRepository) Read(repoImage string) ([]string, error) {
 
 	return raw.(*promoter.Repos).Tags, nil
 
+}
+
+func (r *memDBRepository) UpdateTags(repoImage string, repo string, image string, newTags []string) error {
+	fmt.Println("I'm in update")
+	currentTags, err := r.Read(repoImage)
+	if err != nil {
+		fmt.Println("Unable to find any current repoImage")
+	}
+	fmt.Printf("Here is the current tags %v", currentTags)
+
+	// newTags will allways only contain 1 value
+	realTag := promoter.AppendIfMissing(currentTags, newTags[0])
+	fmt.Println(realTag)
+
+	// Update/Create the tags in repoImage
+	_, err = r.Store(repoImage, repo, image, realTag)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 /*
