@@ -1,11 +1,11 @@
 package hmemdb
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/NissesSenap/promotionChecker/promoter"
 	"github.com/hashicorp/go-memdb"
+	"go.uber.org/zap"
 )
 
 type memDBRepository struct {
@@ -78,30 +78,28 @@ func (r *memDBRepository) Read(repoImage string) ([]string, error) {
 	txn := r.client.Txn(false)
 	defer txn.Abort()
 
-	fmt.Println("I'm in read")
 	// Lookup by repoImage
 	raw, err := txn.First(r.tableName, "id", repoImage)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("This is my tags! %v\n", raw.(*promoter.Repos).Tags)
+	zap.S().Debugf("Current tags %s in repoImage: %s", raw.(*promoter.Repos).Tags, repoImage)
 
 	return raw.(*promoter.Repos).Tags, nil
 
 }
 
 func (r *memDBRepository) UpdateTags(repoImage string, repo string, image string, newTags []string) error {
-	fmt.Println("I'm in update")
 	currentTags, err := r.Read(repoImage)
 	if err != nil {
-		fmt.Println("Unable to find any current repoImage")
+		return err
 	}
-	fmt.Printf("Here is the current tags %v", currentTags)
+	zap.S().Debug("Here is the current tags %v", currentTags)
 
 	// newTags will allways only contain 1 value since it gets called from the for loop
 	realTag := promoter.AppendIfMissing(currentTags, newTags[0])
-	fmt.Println(realTag)
+	zap.S().Infof("The new tag: %s in repoImage %s: ", realTag, repoImage)
 
 	// Update/Create the tags in repoImage
 	err = r.Store(repoImage, repo, image, realTag)

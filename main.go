@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +13,8 @@ import (
 
 	"github.com/NissesSenap/promotionChecker/promoter"
 	mdb "github.com/NissesSenap/promotionChecker/repository/hmemdb"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
 )
 
@@ -54,7 +54,21 @@ type Items struct {
 // Create channel for ctx
 var c = make(chan int)
 
+func initZapLog() *zap.Logger {
+	config := zap.NewDevelopmentConfig()
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	logger, _ := config.Build()
+	return logger
+}
+
 func main() {
+	loggerMgr := initZapLog()
+	zap.ReplaceGlobals(loggerMgr)
+	defer loggerMgr.Sync() // flushes buffer, if any
+	logger := loggerMgr.Sugar()
+
 	filename := getEnv("CONFIGFILE", "data.yaml")
 
 	var item Items
@@ -62,13 +76,13 @@ func main() {
 	// Read the config file
 	source, err := ioutil.ReadFile(filename)
 	if err != nil {
-		panic(err)
+		logger.DPanic(err)
 	}
 
 	// unmarshal the data
 	err = yaml.Unmarshal(source, &item)
 	if err != nil {
-		log.Fatalf("error: %v", err)
+		logger.Fatalf("error: %v", err)
 	}
 
 	/* Check if env ARTIFACTORYAPIKEY got a value
@@ -86,9 +100,9 @@ func main() {
 		item.ArtifactoryUSER = apiUSER
 	}
 
-	fmt.Println(item.ArtifactoryURL)
+	logger.Info("ArtifactoryURL: ", item.ArtifactoryURL)
 
-	fmt.Printf("--- config:\n%v\n\n", item)
+	logger.Infof("config: \n%v", item)
 
 	/* Choose what kind of database that we should use
 	Currently only memDB is supported
@@ -124,12 +138,13 @@ func main() {
 	}
 
 	// Handle potential shutdown like shuting down DB connections
-	fmt.Println("*********************************\nShutdown signal received\n*********************************")
+	logger.Info("Shutdown signal received")
+	// TODO rewrite to show all the tags in the DB, add a if statment checking for level only if debug mode do this
 	tags, err := service.Read("repo1/app1")
 	if err != nil {
-		fmt.Println("Unable to find the repoImage")
+		logger.Errorf("Unable to get data from memDB", err)
 	}
-	fmt.Printf("Here is the tags %v", tags)
+	logger.Debugf("This is the tags found in repo1/app1:", tags)
 
 	cancel()
 }
@@ -145,13 +160,15 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				webhook := item.Containers[i].Webhook
 				image := item.Containers[i].Image
 				repo := item.Containers[i].Repo
-				fmt.Println(webhook, image, repo)
+				zap.S().Debugf("Config to check: ", webhook, image, repo)
 
 				fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
 				req, err := http.NewRequest("GET", fulURL, nil)
 				if err != nil {
-					log.Fatal("Unable to talk to artifactory")
+					// No point to run the application while the target is down
+					zap.S().Panic("Unable to talk to artifactory", err)
+
 				}
 
 				// Depending on config use BasicAuth, header or nothing
@@ -165,7 +182,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				res, err := client.Do(req)
 
 				if err != nil {
-					fmt.Println(err)
+					zap.S().Error(err)
 				}
 
 				if res.Body != nil {
@@ -174,7 +191,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 
 				body, readErr := ioutil.ReadAll(res.Body)
 				if readErr != nil {
-					log.Fatal(readErr)
+					zap.S().Fatal(readErr)
 				}
 
 				tag := Tags{}
@@ -182,7 +199,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				// Unmarshal the data
 				jsonErr := json.Unmarshal(body, &tag)
 				if jsonErr != nil {
-					log.Fatal(jsonErr)
+					zap.S().Fatal(jsonErr)
 				}
 
 				// Go through all the tags
@@ -191,44 +208,44 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 
 					// The [1:] slices the first letter from realTag, in this case remove /
 					realTag := tag.Children[f].URI[1:]
-					fmt.Println(realTag)
+					zap.S().Debug("Removed / from the tag ", realTag)
 
 					// Check the current tags
 					existingTags, err := hmemdbRepo.Read(repoImage)
 					if err != nil {
-						fmt.Println("Unable to find the repoImage")
+						zap.S().Info("Unable to find the repoImage")
 					}
 
 					// Returns true if a we have gotten a new tag
 					if promoter.StringNotInSlice(realTag, existingTags) {
-						fmt.Println("WE HAVE FOUND A NEW TAG")
-						fmt.Println(realTag)
+						zap.S().Debugf("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, realTag)
 
 						// Post to the webhook endpoint
 						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
 						jsonValue, err := json.Marshal(webhookValues)
 						if err != nil {
-							fmt.Println(err)
+							zap.S().Error(err)
 						}
 
 						_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
 						if err != nil {
-							fmt.Println(err)
+							// Rather crash then start to become inconsistent
+							zap.S().Panic("Unable to post the webhook: ", err)
 						}
 
 						// Update db with info
 
 						err = hmemdbRepo.UpdateTags(repoImage, repo, image, []string{realTag})
 						if err != nil {
-							log.Fatal("Unable to store things in the memDB")
+							zap.S().Error(err)
 						}
 
 						// Verify the existing tags
 						tags, err := hmemdbRepo.Read(repoImage)
 						if err != nil {
-							fmt.Println("Unable to find the repoImage")
+							zap.S().Info("Unable to find the repoImage", err)
 						}
-						fmt.Printf("Here is the tags %v", tags)
+						zap.S().Debug("Current ags in the DB: ", tags)
 
 					}
 				}
@@ -246,13 +263,13 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		webhook := item.Containers[i].Webhook
 		image := item.Containers[i].Image
 		repo := item.Containers[i].Repo
-		fmt.Println(webhook, image, repo)
+		zap.S().Debugf("Config to check: ", webhook, image, repo)
 
 		fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
 		req, err := http.NewRequest("GET", fulURL, nil)
 		if err != nil {
-			log.Fatal("Unable to talk to artifactory")
+			zap.S().Panic("Unable to talk to artifactory", err)
 		}
 
 		// Depending on config use BasicAuth, header or nothing
@@ -266,7 +283,7 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		res, err := client.Do(req)
 
 		if err != nil {
-			fmt.Println(err)
+			zap.S().Error(err)
 		}
 
 		if res.Body != nil {
@@ -275,7 +292,7 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 
 		body, readErr := ioutil.ReadAll(res.Body)
 		if readErr != nil {
-			log.Fatal(readErr)
+			zap.S().Fatal(readErr)
 		}
 
 		tag := Tags{}
@@ -283,7 +300,7 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		// Unmarshal the data
 		jsonErr := json.Unmarshal(body, &tag)
 		if jsonErr != nil {
-			log.Fatal(jsonErr)
+			zap.S().Fatal(jsonErr)
 		}
 
 		// Cleanup the tags, in this case remove / from them
@@ -304,10 +321,9 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 // getEnv get key environment variable if exist otherwise return defalutValue
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
-		fmt.Println("In getEnv")
-		fmt.Println(value)
+		zap.S().Info(value)
+
 		return value
-		// TODO add a log debug here and print the value
 	}
 	return defaultValue
 }
@@ -317,7 +333,7 @@ func chooseRepo(tableName string, timeout int, dbType string) promoter.RedirectR
 	case "memDB":
 		repo, err := mdb.NewMemDBRepository(tableName, timeout)
 		if err != nil {
-			log.Fatal(err)
+			zap.S().Fatal(err)
 		}
 		return repo
 	}
