@@ -34,11 +34,11 @@ func AppendIfMissing(slice []string, i string) []string {
 }
 
 // StringInSlice checks if a string is in the existing list
-func StringInSlice(a string, list []string) bool {
+func StringNotInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }

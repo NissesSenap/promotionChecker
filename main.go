@@ -111,7 +111,7 @@ func main() {
 	// hmemdbRepo.Store("repo1/app1", "repo1", "app1", []string{"v1.0.0", "v2.0.0"})
 
 	// Start the initial function that adds the current info to the memDB
-	go initialRunner(ctx, &item, client, service)
+	initialRunner(&item, client, service)
 
 	// goroutine start the infinate runner function
 	go runner(ctx, &item, client, service)
@@ -189,36 +189,49 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 
 				// Go through all the tags
 				for f := range tag.Children {
+					repoImage := repo + "/" + image
+
 					// The [1:] slices the first letter from realTag, in this case remove /
 					realTag := tag.Children[f].URI[1:]
 					fmt.Println(realTag)
 
-					// TODO add check to see if we got any new tag. Else don't send the webhook nor update the DB
-					// Post to the webhook endpoint
-					webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
-					jsonValue, err := json.Marshal(webhookValues)
-					if err != nil {
-						fmt.Println(err)
-					}
-
-					_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
-					if err != nil {
-						fmt.Println(err)
-					}
-
-					// Update db with info
-					repoImage := repo + "/" + image
-
-					err = hmemdbRepo.UpdateTags(repoImage, repo, image, []string{realTag})
-					if err != nil {
-						log.Fatal("Unable to store things in the memDB")
-					}
-					tags, err := hmemdbRepo.Read(repoImage)
+					// Check the current tags
+					existingTags, err := hmemdbRepo.Read(repoImage)
 					if err != nil {
 						fmt.Println("Unable to find the repoImage")
 					}
-					fmt.Printf("Here is the tags %v", tags)
 
+					// Returns true if a we have gotten a new tag
+					if promoter.StringNotInSlice(realTag, existingTags) {
+						fmt.Println("WE HAVE FOUND A NEW TAG")
+						fmt.Println(realTag)
+
+						// TODO add check to see if we got any new tag. Else don't send the webhook nor update the DB
+						// Post to the webhook endpoint
+						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
+						jsonValue, err := json.Marshal(webhookValues)
+						if err != nil {
+							fmt.Println(err)
+						}
+
+						_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+						if err != nil {
+							fmt.Println(err)
+						}
+
+						// Update db with info
+
+						err = hmemdbRepo.UpdateTags(repoImage, repo, image, []string{realTag})
+						if err != nil {
+							log.Fatal("Unable to store things in the memDB")
+						}
+						tags, err := hmemdbRepo.Read(repoImage)
+						if err != nil {
+							fmt.Println("Unable to find the repoImage")
+						}
+						fmt.Printf("Here is the tags %v", tags)
+
+					}
 				}
 			}
 
@@ -228,70 +241,65 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 	}
 }
 
-func initialRunner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) {
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		for i := range item.Containers {
+func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) {
+	for i := range item.Containers {
 
-			webhook := item.Containers[i].Webhook
-			image := item.Containers[i].Image
-			repo := item.Containers[i].Repo
-			fmt.Println(webhook, image, repo)
+		webhook := item.Containers[i].Webhook
+		image := item.Containers[i].Image
+		repo := item.Containers[i].Repo
+		fmt.Println(webhook, image, repo)
 
-			fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+		fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
-			req, err := http.NewRequest("GET", fulURL, nil)
-			if err != nil {
-				log.Fatal("Unable to talk to artifactory")
-			}
-
-			// Depending on config use BasicAuth, header or nothing
-			if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-				req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-			} else if item.ArtifactoryAPIkey != "" {
-				req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
-			}
-
-			// Perform GET to URI
-			res, err := client.Do(req)
-
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			if res.Body != nil {
-				defer res.Body.Close()
-			}
-
-			body, readErr := ioutil.ReadAll(res.Body)
-			if readErr != nil {
-				log.Fatal(readErr)
-			}
-
-			tag := Tags{}
-
-			// Unmarshal the data
-			jsonErr := json.Unmarshal(body, &tag)
-			if jsonErr != nil {
-				log.Fatal(jsonErr)
-			}
-
-			// Cleanup the tags, in this case remove / from them
-			var slicedTags []string
-			for s := range tag.Children {
-				realTag := tag.Children[s].URI[1:]
-				slicedTags = append(slicedTags, realTag)
-			}
-
-			repoImage := repo + "/" + image
-
-			// Store all the existing tags in the memDB
-			hmemdbRepo.Store(repoImage, repo, image, slicedTags)
+		req, err := http.NewRequest("GET", fulURL, nil)
+		if err != nil {
+			log.Fatal("Unable to talk to artifactory")
 		}
-		return
+
+		// Depending on config use BasicAuth, header or nothing
+		if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
+			req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
+		} else if item.ArtifactoryAPIkey != "" {
+			req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+		}
+
+		// Perform GET to URI
+		res, err := client.Do(req)
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if res.Body != nil {
+			defer res.Body.Close()
+		}
+
+		body, readErr := ioutil.ReadAll(res.Body)
+		if readErr != nil {
+			log.Fatal(readErr)
+		}
+
+		tag := Tags{}
+
+		// Unmarshal the data
+		jsonErr := json.Unmarshal(body, &tag)
+		if jsonErr != nil {
+			log.Fatal(jsonErr)
+		}
+
+		// Cleanup the tags, in this case remove / from them
+		var slicedTags []string
+		for s := range tag.Children {
+			realTag := tag.Children[s].URI[1:]
+			slicedTags = append(slicedTags, realTag)
+		}
+
+		repoImage := repo + "/" + image
+
+		// Store all the existing tags in the memDB
+		hmemdbRepo.Store(repoImage, repo, image, slicedTags)
 	}
+	return
 }
 
 // getEnv get key environment variable if exist otherwise return defalutValue
