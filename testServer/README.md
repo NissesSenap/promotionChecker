@@ -8,6 +8,13 @@ Far from the best code but it dose the job.
 
 I created a bug explaining  the issue in the JFrog [Jira](https://www.jfrog.com/jira/browse/RTFACT-23754)
 
+## Update
+
+To verify that it works to see a new tag and my DB will behave I created a super ugly way to update it without a DB in the testServer.
+Just curl /update and it will add a new tag to the list.
+
+`curl localhost:8081/update`
+
 ## /tags
 
 Use a GET
