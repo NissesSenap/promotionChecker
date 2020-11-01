@@ -108,3 +108,4 @@ In no particular order.
 - Create a basic k8s deployment file
 - Write a example trigger binding for tekton
 - Add version file
+- Add livliness for k8s

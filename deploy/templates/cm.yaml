@@ -1,0 +1,20 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: promoter-config
+data:
+  data.yaml: |
+    ---
+    artifactoryURL: {{ .Values.config.artifactoryURL }}
+    {{- if .Values.config.artifactoryAPIkey }}
+    artifactoryAPIkey: {{ .Values.config.artifactoryAPIkey }}
+    {{- end }}
+    {{- if .Values.config.artifactoryUSER }}
+    artifactoryUSER: {{ .Values.config.artifactoryUSER }}
+    {{- end }}
+    pollTime: {{ .Values.config.pollTime }}
+    httpTimeout: {{ .Values.config.httpTimeout }}
+    dbType: {{ .Values.config.dbType }}
+
+    containers:
+    {{- toYaml .Values.containers | nindent 6 }}
