@@ -166,44 +166,9 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				repo := item.Containers[i].Repo
 				zap.S().Debugf("Config to check: ", webhook, image, repo)
 
-				fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
-
-				req, err := http.NewRequest("GET", fulURL, nil)
+				tag, err := requestArtData(webhook, image, repo, item, client)
 				if err != nil {
-					// No point to run the application while the target is down
-					zap.S().Panic("Unable to talk to artifactory", err)
-
-				}
-
-				// Depending on config use BasicAuth, header or nothing
-				if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-					req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-				} else if item.ArtifactoryAPIkey != "" {
-					req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
-				}
-
-				// Perform GET to URI
-				res, err := client.Do(req)
-
-				if err != nil {
-					zap.S().Error(err)
-				}
-
-				if res.Body != nil {
-					defer res.Body.Close()
-				}
-
-				body, readErr := ioutil.ReadAll(res.Body)
-				if readErr != nil {
-					zap.S().Fatal(readErr)
-				}
-
-				tag := Tags{}
-
-				// Unmarshal the data
-				jsonErr := json.Unmarshal(body, &tag)
-				if jsonErr != nil {
-					zap.S().Fatal(jsonErr)
+					zap.S().DPanic("Unable to get data from artifactory: ", err)
 				}
 
 				// Go through all the tags
@@ -280,45 +245,11 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		repo := item.Containers[i].Repo
 		zap.S().Debugf("Config to check: ", webhook, image, repo)
 
-		fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
-
-		req, err := http.NewRequest("GET", fulURL, nil)
+		tag, err := requestArtData(webhook, image, repo, item, client)
 		if err != nil {
-			zap.S().Panic("Unable to talk to artifactory", err)
+			zap.S().DPanic("Unable to get data from artifactory: ", err)
 		}
-
-		// Depending on config use BasicAuth, header or nothing
-		if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-			req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-		} else if item.ArtifactoryAPIkey != "" {
-			req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
-		}
-
-		// Perform GET to URI
-		res, err := client.Do(req)
-
-		if err != nil {
-			zap.S().Error(err)
-		}
-
-		if res.Body != nil {
-			defer res.Body.Close()
-		}
-
-		body, readErr := ioutil.ReadAll(res.Body)
-		if readErr != nil {
-			zap.S().Fatal(readErr)
-		}
-
-		tag := Tags{}
-
-		// Unmarshal the data
-		jsonErr := json.Unmarshal(body, &tag)
-		if jsonErr != nil {
-			zap.S().Fatal(jsonErr)
-		}
-
-		// Cleanup the tags, in this case remove / from them
+		// Store all the tags in one slice
 		var slicedTags []string
 		for s := range tag.Children {
 			realTag := tag.Children[s].URI
@@ -331,6 +262,47 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		hmemdbRepo.Store(repoImage, repo, image, slicedTags)
 	}
 	return
+}
+
+func requestArtData(webhook string, image string, repo string, item *Items, client *http.Client) (*Tags, error) {
+	fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+
+	req, err := http.NewRequest("GET", fulURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Depending on config use BasicAuth, header or nothing
+	if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
+		req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
+	} else if item.ArtifactoryAPIkey != "" {
+		req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+	}
+
+	// Perform GET to URI
+	res, err := client.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return nil, err
+	}
+
+	tag := Tags{}
+
+	// Unmarshal the data
+	jsonErr := json.Unmarshal(body, &tag)
+	if jsonErr != nil {
+		return nil, err
+	}
+	return &tag, nil
 }
 
 // getEnv get key environment variable if exist otherwise return defalutValue

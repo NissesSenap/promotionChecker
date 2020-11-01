@@ -92,20 +92,19 @@ curl -H "X-JFrog-Art-Api:$APIKEY" -X GET http://localhost:8081/api/docker/repo1/
 
 ```
 
+## Assumptions
+
+- Currently assume that it's okay that I have missed updates in the repos
+  - At startup create a status of the current env and save in the DB.
+  - From there start creating webhooks depending on new changes to the repos
+
 ## TODO
 
 In no particular order.
 
 - Refactor to look nicer
-- Store all the data in something like a db or file
-  - Currently points towards [go-memdb](https://github.com/hashicorp/go-memdb)
-  - Currently there is only one value tag saved in the DB. Use the UpdateTags in logic.go
 - Write a container file
 - Create some metrics
 - If speed is needed create channels to perform the API requests
-- Currently assume that it's okay that I have missed updates in the repos
-  - At startup create a status of the current env and save in the DB.
-  - From there start creating webhooks depending on new changes to the repos
 - Create a basic k8s deployment file
 - Write a example trigger binding for tekton
-- Use log everywhere instead of print
