@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Tags artifactory output from rest call
 type Tags struct {
 	Repo         string
 	Path         string
@@ -30,17 +31,20 @@ type Tags struct {
 	URI          string
 }
 
+// Children artifactory output for all tags
 type Children struct {
 	URI    string
 	Folder bool
 }
 
+// Item the config values that the app check
 type Item struct {
 	Repo    string
 	Image   string
 	Webhook string
 }
 
+// Items config file struct
 type Items struct {
 	Containers        []Item `containers`
 	ArtifactoryURL    string `artifactoryURL`
@@ -206,32 +210,43 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				for f := range tag.Children {
 					repoImage := repo + "/" + image
 
-					// The [1:] slices the first letter from realTag, in this case remove /
-					realTag := tag.Children[f].URI[1:]
-					zap.S().Debug("Removed / from the tag ", realTag)
+					// Shorter to write realTag then tag.Children[f].URI
+					realTag := tag.Children[f].URI
 
 					// Check the current tags
 					existingTags, err := hmemdbRepo.Read(repoImage)
 					if err != nil {
-						zap.S().Info("Unable to find the repoImage")
+						zap.S().Panic("Unable to find the repoImage")
 					}
 
 					// Returns true if a we have gotten a new tag
 					if promoter.StringNotInSlice(realTag, existingTags) {
-						zap.S().Debugf("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, realTag)
+						zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, realTag)
 
 						// Post to the webhook endpoint
-						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag}
+						// Notice the slice of realTag, removing the / that is stored in the DB.
+						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag[1:]}
 						jsonValue, err := json.Marshal(webhookValues)
 						if err != nil {
 							zap.S().Error(err)
 						}
 
-						_, err = client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+						res, err := client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
 						if err != nil {
 							// Rather crash then start to become inconsistent
 							zap.S().Panic("Unable to post the webhook: ", err)
 						}
+						if res.Body != nil {
+							defer res.Body.Close()
+						}
+
+						body, readErr := ioutil.ReadAll(res.Body)
+						if readErr != nil {
+							zap.S().Error(readErr)
+						}
+
+						// No need to do a marshall stuff. Just a pain to maintain the different webhooks, just want output for logs.
+						zap.S().Infof("Output from webhook: %s", string(body))
 
 						// Update db with info
 
@@ -243,7 +258,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 						// Verify the existing tags
 						tags, err := hmemdbRepo.Read(repoImage)
 						if err != nil {
-							zap.S().Info("Unable to find the repoImage", err)
+							zap.S().Panic("Unable to find the repoImage", err)
 						}
 						zap.S().Debug("Current ags in the DB: ", tags)
 
@@ -306,7 +321,7 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		// Cleanup the tags, in this case remove / from them
 		var slicedTags []string
 		for s := range tag.Children {
-			realTag := tag.Children[s].URI[1:]
+			realTag := tag.Children[s].URI
 			slicedTags = append(slicedTags, realTag)
 		}
 
