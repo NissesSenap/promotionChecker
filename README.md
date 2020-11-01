@@ -103,8 +103,8 @@ curl -H "X-JFrog-Art-Api:$APIKEY" -X GET http://localhost:8081/api/docker/repo1/
 In no particular order.
 
 - Refactor to look nicer
-- Write a container file
 - Create some metrics
 - If speed is needed create channels to perform the API requests
 - Create a basic k8s deployment file
 - Write a example trigger binding for tekton
+- Add version file

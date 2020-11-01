@@ -2,3 +2,6 @@
 .history/
 
 .env
+
+#go
+bin/
