@@ -9,7 +9,7 @@ image:
   tag: "7a36c2a"
 
 config:
-  artifactoryURL: http://localhost:8081
+  artifactoryURL: http://test-promotion-test-promotion-checker:8081
   artifactoryAPIkey: ""
   artifactoryUSER: ""
   pollTime: 10
@@ -19,10 +19,10 @@ config:
 containers:
   - repo: repo1
     image: app1
-    webhook: http://localhost:8081/webhook
+    webhook: http://test-promotion-test-promotion-checker:8081/webhook
   - repo: repo2
     image: app2
-    webhook: http://localhost:8081/webhook
+    webhook: http://test-promotion-test-promotion-checker:8081/webhook
 
 
 imagePullSecrets: []

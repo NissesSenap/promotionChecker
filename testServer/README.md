@@ -15,6 +15,10 @@ Just curl /update and it will add a new tag to the list.
 
 `curl localhost:8081/update`
 
+Or if you are using the default settings for helm in the project promotion.
+
+`curl -k https://test-promotion-test-promotion-checker-promotion.apps-crc.testing/update`
+
 ## /tags
 
 Use a GET

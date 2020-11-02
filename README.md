@@ -105,7 +105,7 @@ In no particular order.
 - Refactor to look nicer
 - Create some metrics
 - If speed is needed create channels to perform the API requests
-- Create a basic k8s deployment file
+- Improve the helm config, with more config logic. Like setting default value for data.yaml for example
 - Write a example trigger binding for tekton
 - Add version file
 - Add livliness for k8s
