@@ -1,0 +1,21 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: echo-hello-world
+spec:
+  params:
+    - name: image
+      description: The container image, including URI
+      type: string
+      default: myMegaImage
+    - name: tag
+      description: The container image, including URI
+      type: string
+      default: v0.0.1
+  steps:
+    - name: echo
+      script: |
+        # A simple echo of the parameters
+        echo $(params.image)
+        echo $(params.tag)
+      image: ubuntu

@@ -1,0 +1,12 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: cel-listener-interceptor
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: cel-trig-with-matches
+      bindings:
+      - ref: pipeline-binding
+      template:
+        name: trigger-task-template

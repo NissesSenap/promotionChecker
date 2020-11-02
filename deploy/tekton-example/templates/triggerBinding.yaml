@@ -1,0 +1,12 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: pipeline-binding
+spec:
+  params:
+  - name: repo
+    value: $(body.repo)
+  - name: image
+    value: $(body.image)
+  - name: tag
+    value: $(body.tag)

@@ -7,7 +7,42 @@ So lets go old school and poll stuff instead.
 
 I will do some specific coding for artifactory but it shouldn't be hard to adopt another endpoint like nexus.
 
-## Test the app
+## Tekton webhook
+
+I'm using tekton to trigger pipelines and thats why I need info when a new image tag is in artifactory.
+
+I have created a example tekton CEL binding listening for **tag** and **image**.
+
+To use it first you need to install the tekton operator, ether [follow](https://tekton.dev/docs/triggers/install/)
+or if you are using OCP you can search for `tekton` in OLM and install it from there.
+
+To deploy the helm chart ether use the make commands or use helm install under deploy/tekton-example.
+
+I have tested using **openshift pipelines version 1.1.1**.
+
+In the latest version of tekton there is some **breaking** changes for triggersTemplate
+
+## Test manually
+
+The default values in the values is set to work with the following config together with the test server.
+
+```bash
+oc new-project promotion
+make test/helm
+make tekton/helm
+make helm
+
+# Assuming that your route is name test-promotion-test-promotion-checker
+# This will trigger a change in the tags on the test server and should trigger a webhook which should trigger the trigger-template
+curl -k https://$(oc get route test-promotion-test-promotion-checker -o go-template --template='{{.spec.host}}')/update
+
+```
+
+If you look at the logs of the task that ran you should see something like:
+
+app1 & MyNewTAG
+
+## Test the app artifactory
 
 If you don't have a JFrog artifactory with pro license sitting around you can start a [test subscription](https://jfrog.com/artifactory/start-free/).
 Sadly the open-source version of artifactory isn't enough due to the rest API.

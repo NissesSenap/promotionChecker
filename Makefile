@@ -26,8 +26,11 @@ test/push:
 test/helm:
 	helm upgrade --install test-promotion testServer/test-promotion-checker
 
+tekton/helm:
+	helm upgrade --install tekton deploy/tekton-example
+
 helm:
-	helm upgrade --install promotion deploy
+	helm upgrade --install promotion deploy/promoter
 
 clean:
 	rm -rf ./bin ./share

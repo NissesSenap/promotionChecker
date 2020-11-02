@@ -19,10 +19,10 @@ config:
 containers:
   - repo: repo1
     image: app1
-    webhook: http://test-promotion-test-promotion-checker:8081/webhook
+    webhook: http://el-cel-listener-interceptor:8080/webhook
   - repo: repo2
     image: app2
-    webhook: http://test-promotion-test-promotion-checker:8081/webhook
+    webhook: http://el-cel-listener-interceptor:8080/webhook
 
 
 imagePullSecrets: []

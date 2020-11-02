@@ -1,0 +1,24 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: trigger-task-template
+spec:
+  params:
+  - name: image
+    description: The container image
+  - name: tag
+    description: The container tag
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: TaskRun
+    metadata:
+      generateName: simple-task-run-
+    spec:
+      taskRef:
+      #pipelineRef:
+        name: echo-hello-world
+      params:
+        - name: image
+          value: $(tt.params.image)
+        - name: tag
+          value: $(tt.params.tag)
