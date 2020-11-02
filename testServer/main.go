@@ -30,6 +30,7 @@ var Mylist []Children
 func main() {
 	// Start with a base list
 	startList()
+	fmt.Println("The app is starting")
 
 	// Create the handlers
 	http.HandleFunc("/api/storage/repo1/app1", tags)

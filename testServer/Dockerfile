@@ -2,13 +2,9 @@ FROM golang:1.15-buster as builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
-
-RUN go mod download
-
 COPY . .
 
-RUN go build -o bin/promotionChecker main.go
+RUN go build -o testbin/promotionTestServer main.go
 
 FROM debian:buster-slim
 
@@ -24,14 +20,14 @@ LABEL \
   org.opencontainers.image.version="$VERSION" \
   org.opencontainers.image.vendor="GitHub" \
   org.opencontainers.image.licenses="MIT" \
-  summary="promotionChecker is a pre-webhook tool for artifactory" \
-  description="promotionChecker is a pre-webhook tool for artifactory that polls artifactory according to a pre-defined sync window" \
-  name="promotionChecker"
+  summary="promotionTestServer is a fake artifactory server" \
+  description="promotionTestServer is a fake artifactory server that only responds to a VERY limited set of requests and is used for testing in this project" \
+  name="promotionTestServer"
 
 USER 1001
 
 WORKDIR /app
 
-COPY --from=builder /app/bin/promotionChecker .
+COPY --from=builder /app/testbin/promotionTestServer .
 
-CMD ["./promotionChecker"]
+CMD ["./promotionTestServer"]
