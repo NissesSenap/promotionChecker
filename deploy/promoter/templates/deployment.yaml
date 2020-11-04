@@ -11,10 +11,8 @@ spec:
       {{- include "promotion-checker.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
+        checksum/cm: {{ include (print $.Template.BasePath "/cm.yaml") . | sha256sum }}
       labels:
         {{- include "promotion-checker.selectorLabels" . | nindent 8 }}
     spec:

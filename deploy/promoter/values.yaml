@@ -14,6 +14,7 @@ config:
   artifactoryUSER: ""
   pollTime: 10
   httpTimeout: 3
+  httpInsecure: true
   dbType: memDB
 
 containers:
@@ -28,8 +29,6 @@ containers:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-
-podAnnotations: {}
 
 podSecurityContext: {}
   # fsGroup: 2000
