@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NissesSenap/promotionChecker/build"
 	"github.com/NissesSenap/promotionChecker/promoter"
 	mdb "github.com/NissesSenap/promotionChecker/repository/hmemdb"
 	"go.uber.org/zap"
@@ -75,6 +76,8 @@ func main() {
 	zap.ReplaceGlobals(loggerMgr)
 	defer loggerMgr.Sync() // flushes buffer, if any
 	logger := loggerMgr.Sugar()
+
+	logger.Infof("promotionChecker Version: %s, BuildDate: %s", build.Version, build.BuildDate)
 
 	filename := getEnv("CONFIGFILE", "data.yaml")
 

@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o bin/promotionChecker main.go
+RUN make bin/pc
 
 FROM debian:buster-slim
 
