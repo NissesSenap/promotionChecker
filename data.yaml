@@ -4,6 +4,7 @@ artifactoryURL: http://localhost:8081
 # artifactoryUSER: myUSER
 pollTime: 10
 httpTimeout: 3
+httpInsecure: true
 dbType: memDB
 
 containers:

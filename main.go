@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -52,6 +53,7 @@ type Items struct {
 	ArtifactoryUSER   string `artifactoryUSER`
 	PollTime          int    `pollTime`
 	HTTPtimeout       int    `httpTimeout`
+	HTTPinsecure      bool   `httpInsecure`
 	DBType            string `dbType`
 }
 
@@ -59,7 +61,8 @@ type Items struct {
 var c = make(chan int)
 
 func initZapLog() *zap.Logger {
-	config := zap.NewDevelopmentConfig()
+	//config := zap.NewDevelopmentConfig()
+	config := zap.NewProductionConfig()
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	config.EncoderConfig.TimeKey = "timestamp"
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -114,10 +117,16 @@ func main() {
 	// TODO perfrom a ENUM check on item.DBType
 	repo := chooseRepo("repo", 3, item.DBType)
 
+	// Allow to use https insecurely
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: item.HTTPinsecure},
+	}
+
 	// Create the http client
 	// Notice the time.Duration
 	client := &http.Client{
-		Timeout: time.Second * time.Duration(item.HTTPtimeout),
+		Transport: tr,
+		Timeout:   time.Second * time.Duration(item.HTTPtimeout),
 	}
 
 	// Create base context
@@ -164,7 +173,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 				webhook := item.Containers[i].Webhook
 				image := item.Containers[i].Image
 				repo := item.Containers[i].Repo
-				zap.S().Debugf("Config to check: ", webhook, image, repo)
+				zap.S().Infof("Config to check webhook %s, image: %s, repo: %s: ", webhook, image, repo)
 
 				tag, err := requestArtData(webhook, image, repo, item, client)
 				if err != nil {
