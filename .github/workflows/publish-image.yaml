@@ -1,0 +1,35 @@
+name: promotionchecker-publish
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - '*'
+jobs:
+  build:
+    env:
+      #context: myapp
+      image_name: promotionchecker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Get image tags
+        id: image_tags
+        run: |
+          echo ::set-output name=IMAGE_TAGS::${GITHUB_REF/refs\/tags\//}
+          echo ::set-output name=BUILD_DATE::cat build/build.go |grep BuildDate |awk '{print $4}'
+      - name: Build and publish image to Quay
+        uses: docker/build-push-action@v1
+        with:
+          #path: ${{ env.context }}
+          registry: quay.io
+          repository: nissessenap/${{ env.image_name }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+          tags: "${{ steps.image_tags.outputs.IMAGE_TAGS }}"
+          build_args: |
+            BUILD_DATE="${{ steps.image_tags.outputs.BUILD_DATE }}"
+            VERSION="${{ steps.image_tags.outputs.IMAGE_TAGS }}"
+      -
+        name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
