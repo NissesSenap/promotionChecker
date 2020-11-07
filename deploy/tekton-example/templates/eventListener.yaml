@@ -6,6 +6,11 @@ spec:
   serviceAccountName: pipeline
   triggers:
     - name: cel-trig-with-matches
+      interceptors:
+        - cel:
+            filter: >-
+              header.match('Event-Promoter-Checker-Com', 'webhook') &&
+              header.canonical('x-secret-token').compareSecret('token', 'mysecret')
       bindings:
       - ref: pipeline-binding
       template:

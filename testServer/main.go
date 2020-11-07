@@ -51,6 +51,8 @@ func webhook(w http.ResponseWriter, r *http.Request) {
 	bodyString := string(bodyBytes)
 	fmt.Println(bodyString)
 
+	fmt.Println("###### HEADER INFO################")
+	fmt.Println(r.Header)
 	// Return a ok in normal text
 	js := []byte("ok")
 	w.Header().Set("Content-Type", "application/json")

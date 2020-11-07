@@ -5,6 +5,7 @@ artifactoryURL: http://localhost:8081
 pollTime: 10
 httpTimeout: 3
 httpInsecure: true
+webhookSecret: test-secret
 dbType: memDB
 
 containers:

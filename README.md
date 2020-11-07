@@ -140,7 +140,12 @@ In no particular order.
 - Refactor to look nicer
 - Create some metrics
 - If speed is needed create channels to perform the API requests
-- Improve the helm config, with more config logic. Like setting default value for data.yaml for example
-- Write a example trigger binding for tekton
-- Add version file
-- Add livliness for k8s
+- Improve the helm config, with more config logic
+- Add liveliness for k8s
+- Two http clients, one might want to enforce https while the other doesn't.
+  Might be easier to overwrite config depending on needs...
+  - One for artifactory
+  - One for talking to the webhook
+- Break out secrets in to a separate k8s file or use env variables
+- Write units tests
+- Use testServer for simple e2e tests

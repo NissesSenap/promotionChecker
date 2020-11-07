@@ -55,6 +55,7 @@ type Items struct {
 	PollTime          int    `pollTime`
 	HTTPtimeout       int    `httpTimeout`
 	HTTPinsecure      bool   `httpInsecure`
+	WebhookSecret     string `webhookSecret`
 	DBType            string `dbType`
 }
 
@@ -208,11 +209,25 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 							zap.S().Error(err)
 						}
 
-						res, err := client.Post(webhook, "application/json", bytes.NewBuffer(jsonValue))
+						req, err := http.NewRequest("POST", webhook, bytes.NewBuffer(jsonValue))
 						if err != nil {
-							// Rather crash then start to become inconsistent
 							zap.S().Panic("Unable to post the webhook: ", err)
+							return
 						}
+
+						// Adding headers to the webhook request
+						req.Header.Set("Content-Type", "application/json")
+						req.Header.Add("Event-Promoter-Checker-Com", "webhook")
+
+						// Add a secret in the webhook so you can verify it in the EventListener
+						req.Header.Add("X-Secret-Token", item.WebhookSecret)
+
+						res, err := client.Do(req)
+
+						if err != nil {
+							return
+						}
+
 						if res.Body != nil {
 							defer res.Body.Close()
 						}

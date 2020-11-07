@@ -15,6 +15,7 @@ data:
     pollTime: {{ .Values.config.pollTime }}
     httpTimeout: {{ .Values.config.httpTimeout }}
     httpInsecure: {{ .Values.config.httpInsecure }}
+    webhookSecret: {{ .Values.config.httpInsecure }}
     dbType: {{ .Values.config.dbType }}
 
     containers:
