@@ -6,7 +6,7 @@ image:
   repository: quay.io/nissessenap/promotionchecker
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "7a36c2a"
+  tag: "v0.2.0-6-g9495e0a"
 
 config:
   artifactoryURL: http://test-promotion-test-promotion-checker:8081
@@ -17,6 +17,7 @@ config:
   httpInsecure: true
   webhookSecret: test-secret
   dbType: memDB
+  # endpointPort is missing under cm, it uses service.port. This to make it inpossible to mix up the config
 
 containers:
   - repo: repo1

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -58,6 +59,7 @@ type Items struct {
 	HTTPinsecure      bool   `httpInsecure`
 	WebhookSecret     string `webhookSecret`
 	DBType            string `dbType`
+	EndpointPort      int    `endpointPort`
 }
 
 // Create channel for ctx
@@ -150,7 +152,7 @@ func main() {
 
 	// Starting metrics http server & endpoint
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":9090", nil)
+	http.ListenAndServe(":"+strconv.Itoa(item.EndpointPort), nil)
 
 	// Create a channel that listens for SIGTERM
 	signalCh := make(chan os.Signal, 1)

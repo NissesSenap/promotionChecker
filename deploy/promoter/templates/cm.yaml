@@ -17,6 +17,7 @@ data:
     httpInsecure: {{ .Values.config.httpInsecure }}
     webhookSecret: {{ .Values.config.webhookSecret }}
     dbType: {{ .Values.config.dbType }}
+    endpointPort: {{ .Values.service.port }}
 
     containers:
     {{- toYaml .Values.containers | nindent 6 }}
