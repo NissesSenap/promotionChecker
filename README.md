@@ -62,6 +62,7 @@ app1 & MyNewTAG
 - Currently assume that it's okay that I have missed updates in the repos
   - At startup create a status of the current env and save in the DB.
   - From there start creating webhooks depending on new changes to the repos
+- Any tag called _uploads will be ignored by promotionChecker (this is a artifactory tmp folder)
 
 ## TODO
 

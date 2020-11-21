@@ -36,6 +36,7 @@ func main() {
 	http.HandleFunc("/api/storage/repo1/app1", tags)
 	http.HandleFunc("/api/storage/repo2/app2", tags2)
 	http.HandleFunc("/update", update)
+	http.HandleFunc("/uploads", updateUploads)
 	http.HandleFunc("/webhook", webhook)
 	http.ListenAndServe(":8081", nil)
 }
@@ -84,6 +85,35 @@ func postTags() {
 		{URI: "/MyNewTAG", Folder: true},
 	}
 	fmt.Println("I have now updated Mylist")
+
+}
+
+func updateUploads(w http.ResponseWriter, r *http.Request) {
+	// Don't care what comes in I just return ok and see what request we got.
+	fmt.Println("We are inside the /updateUploads")
+
+	postTagsUploads()
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bodyString := string(bodyBytes)
+	fmt.Println(bodyString)
+
+	// Return a ok in normal text
+	js := []byte("ok")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func postTagsUploads() {
+	Mylist = []Children{
+		{URI: "/_uploads", Folder: true},
+		{URI: "/1.0.1-SNAPSHOT", Folder: true},
+		{URI: "/884b988", Folder: true},
+		{URI: "/MyNewTAG", Folder: true},
+	}
+	fmt.Println("I have now updated Mylist with /_uploads")
 
 }
 

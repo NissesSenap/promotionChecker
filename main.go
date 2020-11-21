@@ -72,6 +72,8 @@ func initZapLog() *zap.Logger {
 	return logger
 }
 
+const ignoreTag = "/_uploads"
+
 func main() {
 	loggerMgr := initZapLog()
 	zap.ReplaceGlobals(loggerMgr)
@@ -198,7 +200,8 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 					}
 
 					// Returns true if a we have gotten a new tag
-					if promoter.StringNotInSlice(realTag, existingTags) {
+					//  and the new tag doesn't contain /_uploads
+					if realTag != ignoreTag && promoter.StringNotInSlice(realTag, existingTags) {
 						zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, realTag)
 
 						// Post to the webhook endpoint
