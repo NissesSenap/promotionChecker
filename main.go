@@ -150,7 +150,7 @@ func main() {
 
 	// Starting metrics http server & endpoint
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":2112", nil)
+	http.ListenAndServe(":9090", nil)
 
 	// Create a channel that listens for SIGTERM
 	signalCh := make(chan os.Signal, 1)

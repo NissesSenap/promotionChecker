@@ -1,0 +1,16 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    {{- include "promotion-checker.labels" . | nindent 4 }}
+  name: {{ include "promotion-checker.fullname" . }}-monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    port: http
+    scheme: http
+  selector:
+    matchLabels:
+      {{- include "promotion-checker.selectorLabels" . | nindent 6 }}
+{{- end }}

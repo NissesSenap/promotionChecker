@@ -26,6 +26,12 @@ containers:
     image: app2
     webhook: http://el-cel-listener-interceptor:8080/webhook
 
+metrics:
+  enabled: true
+
+service:
+  type: ClusterIP
+  port: 9090
 
 imagePullSecrets: []
 nameOverride: ""
