@@ -15,6 +15,7 @@ import (
 	"github.com/NissesSenap/promotionChecker/build"
 	"github.com/NissesSenap/promotionChecker/promoter"
 	mdb "github.com/NissesSenap/promotionChecker/repository/hmemdb"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
@@ -147,6 +148,10 @@ func main() {
 	// goroutine start the infinate runner function
 	go runner(ctx, &item, client, service)
 
+	// Starting metrics http server & endpoint
+	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(":2112", nil)
+
 	// Create a channel that listens for SIGTERM
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
@@ -225,6 +230,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 						// Add a secret in the webhook so you can verify it in the EventListener
 						req.Header.Add("X-Secret-Token", item.WebhookSecret)
 
+						start := time.Now()
 						res, err := client.Do(req)
 
 						if err != nil {
@@ -240,6 +246,9 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 							zap.S().Error(readErr)
 						}
 
+						duration := time.Since(start)
+						promoter.HistWebhook.WithLabelValues(repoImage).Observe(duration.Seconds())
+
 						// No need to do a marshall stuff. Just a pain to maintain the different webhooks, just want output for logs.
 						zap.S().Infof("Output from webhook: %s", string(body))
 
@@ -250,7 +259,9 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 							zap.S().Error(err)
 						}
 
+						promoter.NrTagsPromoted.Inc()
 						// Verify the existing tags
+						// TODO add a if to check if in debug, there is no need to run this all the time
 						tags, err := hmemdbRepo.Read(repoImage)
 						if err != nil {
 							zap.S().Panic("Unable to find the repoImage", err)
@@ -309,6 +320,9 @@ func requestArtData(webhook string, image string, repo string, item *Items, clie
 		req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
 	}
 
+	// histogram timer start
+	start := time.Now()
+
 	// Perform GET to URI
 	res, err := client.Do(req)
 
@@ -332,6 +346,11 @@ func requestArtData(webhook string, image string, repo string, item *Items, clie
 	if jsonErr != nil {
 		return nil, err
 	}
+
+	// calculate the duration since the timer started & add to the histogram
+	duration := time.Since(start)
+	promoter.HistArtifactory.WithLabelValues(repo + image).Observe(duration.Seconds())
+
 	return &tag, nil
 }
 

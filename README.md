@@ -69,7 +69,6 @@ app1 & MyNewTAG
 In no particular order.
 
 - Refactor to look nicer
-- Create some metrics
 - If speed is needed create channels to perform the API requests
 - Improve the helm config, with more config logic
 - Add liveliness for k8s
