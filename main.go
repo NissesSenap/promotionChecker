@@ -50,20 +50,17 @@ type Item struct {
 
 // Items config file struct
 type Items struct {
-	Containers        []Item `containers`
-	ArtifactoryURL    string `artifactoryURL`
-	ArtifactoryAPIkey string `artifactoryAPIkey`
-	ArtifactoryUSER   string `artifactoryUSER`
-	PollTime          int    `pollTime`
-	HTTPtimeout       int    `httpTimeout`
-	HTTPinsecure      bool   `httpInsecure`
-	WebhookSecret     string `webhookSecret`
-	DBType            string `dbType`
-	EndpointPort      int    `endpointPort`
+	Containers        []Item `yaml:"containers"`
+	ArtifactoryURL    string `yaml:"artifactoryURL"`
+	ArtifactoryAPIkey string `yaml:"artifactoryAPIkey"`
+	ArtifactoryUSER   string `yaml:"artifactoryUSER"`
+	PollTime          int    `yaml:"pollTime"`
+	HTTPtimeout       int    `yaml:"httpTimeout"`
+	HTTPinsecure      bool   `yaml:"httpInsecure"`
+	WebhookSecret     string `yaml:"webhookSecret"`
+	DBType            string `yaml:"dbType"`
+	EndpointPort      int    `yaml:"endpointPort"`
 }
-
-// Create channel for ctx
-var c = make(chan int)
 
 func initZapLog() *zap.Logger {
 	//config := zap.NewDevelopmentConfig()
@@ -145,14 +142,22 @@ func main() {
 	service := promoter.NewRedirectService(repo)
 
 	// Start the initial function that adds the current info to the memDB
-	initialRunner(&item, client, service)
+	err = initialRunner(&item, client, service)
+	if err != nil {
+		// TODO need to decide how to manage panics and actually panic. Should probably use the singalCh ^^
+		os.Exit(1)
+
+	}
 
 	// goroutine start the infinate runner function
 	go runner(ctx, &item, client, service)
 
 	// Starting metrics http server & endpoint
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":"+strconv.Itoa(item.EndpointPort), nil)
+	err = http.ListenAndServe(":"+strconv.Itoa(item.EndpointPort), nil)
+	if err != nil {
+		logger.Panic("Unable to start http server")
+	}
 
 	// Create a channel that listens for SIGTERM
 	signalCh := make(chan os.Signal, 1)
@@ -280,7 +285,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 	}
 }
 
-func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) {
+func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) error {
 	for i := range item.Containers {
 
 		webhook := item.Containers[i].Webhook
@@ -302,9 +307,14 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		repoImage := repo + "/" + image
 
 		// Store all the existing tags in the memDB
-		hmemdbRepo.Store(repoImage, repo, image, slicedTags)
+		// TODO I'm calling the hmemdbRepo directly... I shouldn't do that.
+		err = hmemdbRepo.Store(repoImage, repo, image, slicedTags)
+		if err != nil {
+			zap.S().DPanic("Unable to store our data")
+			return err
+		}
 	}
-	return
+	return nil
 }
 
 func requestArtData(webhook string, image string, repo string, item *Items, client *http.Client) (*Tags, error) {
