@@ -11,10 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
-const ignoreTag = "/_uploads"
+const ignoreTag string = "/_uploads"
 
-// Runner the main for loop of promoterChecker
-func Runner(ctx context.Context, item *Items, client *http.Client, service RedirectRepository) {
+// TODO create method to throw around all the values.
+// TODO remove a bunch of logs and just return error instead.
+
+// MainRunner the main for loop of promoterChecker
+func MainRunner(ctx context.Context, item *Items, client *http.Client, service RedirectRepository) {
 	select {
 	case <-ctx.Done():
 		return
@@ -34,82 +37,13 @@ func Runner(ctx context.Context, item *Items, client *http.Client, service Redir
 
 				// Go through all the tags
 				for f := range tag.Children {
-					repoImage := repo + "/" + image
 
-					// Shorter to write realTag then tag.Children[f].URI
-					realTag := tag.Children[f].URI
-
-					// Check the current tags
-					existingTags, err := service.Read(repoImage)
+					err = Runner(tag.Children[f].URI, image, repo, webhook, item, client, service)
+					// TODO still needs better error handeling, should i panic here? Should probably do it later...
 					if err != nil {
-						zap.S().Panic("Unable to find the repoImage")
+						panic(err)
 					}
 
-					// Returns true if a we have gotten a new tag
-					//  and the new tag doesn't contain /_uploads
-					if realTag != ignoreTag && StringNotInSlice(realTag, existingTags) {
-						zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, realTag)
-
-						// Post to the webhook endpoint
-						// Notice the slice of realTag, removing the / that is stored in the DB.
-						webhookValues := map[string]string{"image": image, "repo": repo, "tag": realTag[1:]}
-						jsonValue, err := json.Marshal(webhookValues)
-						if err != nil {
-							zap.S().Error(err)
-						}
-
-						req, err := http.NewRequest("POST", webhook, bytes.NewBuffer(jsonValue))
-						if err != nil {
-							zap.S().Panic("Unable to post the webhook: ", err)
-							return
-						}
-
-						// Adding headers to the webhook request
-						req.Header.Set("Content-Type", "application/json")
-						req.Header.Add("Event-Promoter-Checker-Com", "webhook")
-
-						// Add a secret in the webhook so you can verify it in the EventListener
-						req.Header.Add("X-Secret-Token", item.WebhookSecret)
-
-						start := time.Now()
-						res, err := client.Do(req)
-
-						if err != nil {
-							return
-						}
-
-						if res.Body != nil {
-							defer res.Body.Close()
-						}
-
-						body, readErr := ioutil.ReadAll(res.Body)
-						if readErr != nil {
-							zap.S().Error(readErr)
-						}
-
-						duration := time.Since(start)
-						HistWebhook.WithLabelValues(repoImage).Observe(duration.Seconds())
-
-						// No need to do a marshall stuff. Just a pain to maintain the different webhooks, just want output for logs.
-						zap.S().Infof("Output from webhook: %s", string(body))
-
-						// Update db with info
-
-						err = service.UpdateTags(repoImage, repo, image, []string{realTag})
-						if err != nil {
-							zap.S().Error(err)
-						}
-
-						NrTagsPromoted.Inc()
-						// Verify the existing tags
-						// TODO add a if to check if in debug, there is no need to run this all the time
-						tags, err := service.Read(repoImage)
-						if err != nil {
-							zap.S().Panic("Unable to find the repoImage", err)
-						}
-						zap.S().Debug("Current ags in the DB: ", tags)
-
-					}
 				}
 			}
 
@@ -117,6 +51,99 @@ func Runner(ctx context.Context, item *Items, client *http.Client, service Redir
 			time.Sleep(time.Second * time.Duration(item.PollTime))
 		}
 	}
+}
+
+// Runner the main for loop of promoterChecker
+func Runner(tag string, image string, repo string, webhook string, item *Items, client *http.Client, service RedirectRepository) error {
+	repoImage := repo + "/" + image
+
+	// Shorter to write realTag then tag.Children[f].URI
+	//realTag := tag.Children[f].URI
+
+	// Check the current tags
+	existingTags, err := service.Read(repoImage)
+	if err != nil {
+		zap.S().Panic("Unable to find the repoImage")
+		return err
+	}
+
+	// Returns true if a we have gotten a new tag
+	//  and the new tag doesn't contain /_uploads
+	if tag != ignoreTag && StringNotInSlice(tag, existingTags) {
+		zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, tag)
+
+		err = webhookPOST(tag, image, repo, webhook, repoImage, item, client, service)
+		if err != nil {
+			return err
+		}
+
+		// Update db with info
+		err = service.UpdateTags(repoImage, repo, image, []string{tag})
+		if err != nil {
+			zap.S().Error(err)
+			return err
+		}
+
+		NrTagsPromoted.Inc()
+		// Verify the existing tags
+		// TODO add a if to check if in debug, there is no need to run this all the time
+		tags, err := service.Read(repoImage)
+		if err != nil {
+			zap.S().Panic("Unable to find the repoImage", err)
+			return err
+		}
+		zap.S().Debug("Current tags in the DB: ", tags)
+
+	}
+	return nil
+}
+
+func webhookPOST(tag string, image string, repo string, webhook string, repoImage string, item *Items, client *http.Client, service RedirectRepository) error {
+	// Post to the webhook endpoint
+	// Notice the slice of realTag, removing the / that is stored in the DB.
+	webhookValues := map[string]string{"image": image, "repo": repo, "tag": tag[1:]}
+	jsonValue, err := json.Marshal(webhookValues)
+	if err != nil {
+		zap.S().Error(err)
+	}
+
+	req, err := http.NewRequest("POST", webhook, bytes.NewBuffer(jsonValue))
+	if err != nil {
+		zap.S().Panic("Unable to post the webhook: ", err)
+		return err
+	}
+
+	// Adding headers to the webhook request
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("Event-Promoter-Checker-Com", "webhook")
+
+	// Add a secret in the webhook so you can verify it in the EventListener
+	req.Header.Add("X-Secret-Token", item.WebhookSecret)
+
+	start := time.Now()
+	res, err := client.Do(req)
+
+	if err != nil {
+		return err
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		zap.S().Error(readErr)
+		return readErr
+	}
+
+	duration := time.Since(start)
+	HistWebhook.WithLabelValues(repoImage).Observe(duration.Seconds())
+
+	// No need to do a marshall stuff. Just a pain to maintain the different webhooks, just want output for logs.
+	zap.S().Infof("Output from webhook: %s", string(body))
+
+	return nil
 }
 
 // InitialRunner creates the initial data in the database, getting all the data that currently exist in your repo

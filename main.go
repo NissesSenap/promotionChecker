@@ -106,7 +106,7 @@ func main() {
 	}
 
 	// goroutine start the infinate runner function
-	go promoter.Runner(ctx, &item, client, service)
+	go promoter.MainRunner(ctx, &item, client, service)
 
 	// Starting metrics http server & endpoint
 	http.Handle("/metrics", promhttp.Handler())
