@@ -28,6 +28,10 @@ LABEL \
   description="promotionChecker is a pre-webhook tool for artifactory that polls artifactory according to a pre-defined sync window" \
   name="promotionChecker"
 
+RUN apt-get update && apt-get install -y \
+    curl \
+ && rm -rf /var/lib/apt/lists/*
+
 USER 1001
 
 WORKDIR /app
