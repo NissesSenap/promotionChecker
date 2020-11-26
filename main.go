@@ -180,7 +180,7 @@ func main() {
 	cancel()
 }
 
-func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) {
+func runner(ctx context.Context, item *Items, client *http.Client, service promoter.RedirectRepository) {
 	select {
 	case <-ctx.Done():
 		return
@@ -206,7 +206,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 					realTag := tag.Children[f].URI
 
 					// Check the current tags
-					existingTags, err := hmemdbRepo.Read(repoImage)
+					existingTags, err := service.Read(repoImage)
 					if err != nil {
 						zap.S().Panic("Unable to find the repoImage")
 					}
@@ -261,7 +261,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 
 						// Update db with info
 
-						err = hmemdbRepo.UpdateTags(repoImage, repo, image, []string{realTag})
+						err = service.UpdateTags(repoImage, repo, image, []string{realTag})
 						if err != nil {
 							zap.S().Error(err)
 						}
@@ -269,7 +269,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 						promoter.NrTagsPromoted.Inc()
 						// Verify the existing tags
 						// TODO add a if to check if in debug, there is no need to run this all the time
-						tags, err := hmemdbRepo.Read(repoImage)
+						tags, err := service.Read(repoImage)
 						if err != nil {
 							zap.S().Panic("Unable to find the repoImage", err)
 						}
@@ -285,7 +285,7 @@ func runner(ctx context.Context, item *Items, client *http.Client, hmemdbRepo pr
 	}
 }
 
-func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.RedirectRepository) error {
+func initialRunner(item *Items, client *http.Client, service promoter.RedirectRepository) error {
 	for i := range item.Containers {
 
 		webhook := item.Containers[i].Webhook
@@ -307,8 +307,7 @@ func initialRunner(item *Items, client *http.Client, hmemdbRepo promoter.Redirec
 		repoImage := repo + "/" + image
 
 		// Store all the existing tags in the memDB
-		// TODO I'm calling the hmemdbRepo directly... I shouldn't do that.
-		err = hmemdbRepo.Store(repoImage, repo, image, slicedTags)
+		err = service.Store(repoImage, repo, image, slicedTags)
 		if err != nil {
 			zap.S().DPanic("Unable to store our data")
 			return err
