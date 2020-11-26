@@ -61,7 +61,7 @@ func (r *memDBRepository) Store(repoImage string, artrepo string, image string, 
 	txn := r.client.Txn(true)
 
 	// Insert some repo
-	repo := &promoter.Repos{repoImage, artrepo, image, tags}
+	repo := &promoter.Repos{RepoImage: repoImage, Repo: artrepo, Image: image, Tags: tags}
 
 	if err := txn.Insert(r.tableName, repo); err != nil {
 		return err
