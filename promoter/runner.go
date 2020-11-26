@@ -27,7 +27,7 @@ func Runner(ctx context.Context, item *Items, client *http.Client, service Redir
 				repo := item.Containers[i].Repo
 				zap.S().Infof("Config to check webhook %s, image: %s, repo: %s: ", webhook, image, repo)
 
-				tag, err := requestArtData(webhook, image, repo, item, client)
+				tag, err := requestArtData(image, repo, item, client)
 				if err != nil {
 					zap.S().DPanic("Unable to get data from artifactory: ", err)
 				}
@@ -128,7 +128,7 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 		repo := item.Containers[i].Repo
 		zap.S().Debugf("Config to check: ", webhook, image, repo)
 
-		tag, err := requestArtData(webhook, image, repo, item, client)
+		tag, err := requestArtData(image, repo, item, client)
 		if err != nil {
 			zap.S().DPanic("Unable to get data from artifactory: ", err)
 		}
@@ -141,7 +141,7 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 
 		repoImage := repo + "/" + image
 
-		// Store all the existing tags in the memDB
+		// Store all the existing tags in the memDBgolangci-lint
 		err = service.Store(repoImage, repo, image, slicedTags)
 		if err != nil {
 			zap.S().DPanic("Unable to store our data")
@@ -151,7 +151,8 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 	return nil
 }
 
-func requestArtData(webhook string, image string, repo string, item *Items, client *http.Client) (*Tags, error) {
+// requestArtData talks to repo storage on a specific endpoints and check what tags exist
+func requestArtData(image string, repo string, item *Items, client *http.Client) (*Tags, error) {
 	fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
 
 	req, err := http.NewRequest("GET", fulURL, nil)
