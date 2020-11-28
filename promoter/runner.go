@@ -6,15 +6,13 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 const ignoreTag string = "/_uploads"
-
-// TODO create method to throw around all the values.
-// TODO remove a bunch of logs and just return error instead.
 
 type config struct {
 	image     string
@@ -58,15 +56,16 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 				tag, err := config.requestArtData()
 				if err != nil {
 					zap.S().DPanic("Unable to get data from artifactory: ", err)
+					os.Exit(1)
 				}
 
 				// Go through all the tags
 				for f := range tag.Children {
 
 					err = config.runner(tag.Children[f].URI)
-					// TODO still needs better error handeling, should i panic here? Should probably do it later...
 					if err != nil {
-						panic(err)
+						zap.S().DPanic(err)
+						os.Exit(1)
 					}
 
 				}
@@ -86,7 +85,6 @@ func (c *config) runner(tag string) error {
 	// Check the current tags
 	existingTags, err := c.service.Read(c.repoImage)
 	if err != nil {
-		zap.S().Panic("Unable to find the repoImage")
 		return err
 	}
 
@@ -103,7 +101,6 @@ func (c *config) runner(tag string) error {
 		// Update db with info
 		err = c.service.UpdateTags(c.repoImage, c.repo, c.image, []string{tag})
 		if err != nil {
-			zap.S().Error(err)
 			return err
 		}
 
@@ -112,7 +109,6 @@ func (c *config) runner(tag string) error {
 		// TODO add a if to check if in debug, there is no need to run this all the time
 		tags, err := c.service.Read(c.repoImage)
 		if err != nil {
-			zap.S().Panic("Unable to find the repoImage", err)
 			return err
 		}
 		zap.S().Debug("Current tags in the DB: ", tags)
@@ -132,7 +128,6 @@ func (c *config) webhookPOST(tag string) error {
 
 	req, err := http.NewRequest("POST", c.webhook, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		zap.S().Panic("Unable to post the webhook: ", err)
 		return err
 	}
 
@@ -156,7 +151,6 @@ func (c *config) webhookPOST(tag string) error {
 
 	body, readErr := ioutil.ReadAll(res.Body)
 	if readErr != nil {
-		zap.S().Error(readErr)
 		return readErr
 	}
 
@@ -181,7 +175,7 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 
 		tag, err := config.requestArtData()
 		if err != nil {
-			zap.S().DPanic("Unable to get data from artifactory: ", err)
+			return err
 		}
 		// Store all the tags in one slice
 		var slicedTags []string
@@ -195,7 +189,6 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 		// Store all the existing tags in the memDB
 		err = service.Store(repoImage, repo, image, slicedTags)
 		if err != nil {
-			zap.S().DPanic("Unable to store our data")
 			return err
 		}
 	}
