@@ -100,13 +100,12 @@ func main() {
 	// Start the initial function that adds the current info to the memDB
 	err = promoter.InitialRunner(&item, client, service)
 	if err != nil {
-		// TODO need to decide how to manage panics and actually panic. Should probably use the singalCh ^^
+		logger.DPanic(err)
 		os.Exit(1)
-
 	}
 
 	// goroutine start the infinate runner function
-	go promoter.Runner(ctx, &item, client, service)
+	go promoter.MainRunner(ctx, &item, client, service)
 
 	// Starting metrics http server & endpoint
 	http.Handle("/metrics", promhttp.Handler())
