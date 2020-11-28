@@ -16,6 +16,29 @@ const ignoreTag string = "/_uploads"
 // TODO create method to throw around all the values.
 // TODO remove a bunch of logs and just return error instead.
 
+type config struct {
+	image     string
+	repo      string
+	repoImage string
+	webhook   string
+	item      *Items
+	client    *http.Client
+	service   RedirectRepository
+}
+
+func newConfig(image string, repo string, webhook string, repoImage string, item *Items, client *http.Client, service RedirectRepository) *config {
+	return &config{
+		image:     image,
+		repo:      repo,
+		webhook:   webhook,
+		repoImage: repoImage,
+		item:      item,
+		client:    client,
+		service:   service,
+	}
+
+}
+
 // MainRunner the main for loop of promoterChecker
 func MainRunner(ctx context.Context, item *Items, client *http.Client, service RedirectRepository) {
 	select {
@@ -28,9 +51,11 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 				webhook := item.Containers[i].Webhook
 				image := item.Containers[i].Image
 				repo := item.Containers[i].Repo
+				repoImage := repo + "/" + image
+				config := newConfig(image, repo, webhook, repoImage, item, client, service)
 				zap.S().Infof("Config to check webhook %s, image: %s, repo: %s: ", webhook, image, repo)
 
-				tag, err := requestArtData(image, repo, item, client)
+				tag, err := config.requestArtData()
 				if err != nil {
 					zap.S().DPanic("Unable to get data from artifactory: ", err)
 				}
@@ -38,7 +63,7 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 				// Go through all the tags
 				for f := range tag.Children {
 
-					err = runner(tag.Children[f].URI, image, repo, webhook, item, client, service)
+					err = config.runner(tag.Children[f].URI)
 					// TODO still needs better error handeling, should i panic here? Should probably do it later...
 					if err != nil {
 						panic(err)
@@ -54,14 +79,12 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 }
 
 // Runner the main for loop of promoterChecker
-func runner(tag string, image string, repo string, webhook string, item *Items, client *http.Client, service RedirectRepository) error {
-	repoImage := repo + "/" + image
-
+func (c *config) runner(tag string) error {
 	// Shorter to write realTag then tag.Children[f].URI
 	//realTag := tag.Children[f].URI
 
 	// Check the current tags
-	existingTags, err := service.Read(repoImage)
+	existingTags, err := c.service.Read(c.repoImage)
 	if err != nil {
 		zap.S().Panic("Unable to find the repoImage")
 		return err
@@ -70,15 +93,15 @@ func runner(tag string, image string, repo string, webhook string, item *Items, 
 	// Returns true if a we have gotten a new tag
 	//  and the new tag doesn't contain /_uploads
 	if tag != ignoreTag && StringNotInSlice(tag, existingTags) {
-		zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", image, repo, tag)
+		zap.S().Infof("Got a new tag in the image: %s ,repo: %s, newTag %v", c.image, c.repo, tag)
 
-		err = webhookPOST(tag, image, repo, webhook, repoImage, item, client, service)
+		err = c.webhookPOST(tag)
 		if err != nil {
 			return err
 		}
 
 		// Update db with info
-		err = service.UpdateTags(repoImage, repo, image, []string{tag})
+		err = c.service.UpdateTags(c.repoImage, c.repo, c.image, []string{tag})
 		if err != nil {
 			zap.S().Error(err)
 			return err
@@ -87,7 +110,7 @@ func runner(tag string, image string, repo string, webhook string, item *Items, 
 		NrTagsPromoted.Inc()
 		// Verify the existing tags
 		// TODO add a if to check if in debug, there is no need to run this all the time
-		tags, err := service.Read(repoImage)
+		tags, err := c.service.Read(c.repoImage)
 		if err != nil {
 			zap.S().Panic("Unable to find the repoImage", err)
 			return err
@@ -98,16 +121,16 @@ func runner(tag string, image string, repo string, webhook string, item *Items, 
 	return nil
 }
 
-func webhookPOST(tag string, image string, repo string, webhook string, repoImage string, item *Items, client *http.Client, service RedirectRepository) error {
+func (c *config) webhookPOST(tag string) error {
 	// Post to the webhook endpoint
 	// Notice the slice of realTag, removing the / that is stored in the DB.
-	webhookValues := map[string]string{"image": image, "repo": repo, "tag": tag[1:]}
+	webhookValues := map[string]string{"image": c.image, "repo": c.repo, "tag": tag[1:]}
 	jsonValue, err := json.Marshal(webhookValues)
 	if err != nil {
 		zap.S().Error(err)
 	}
 
-	req, err := http.NewRequest("POST", webhook, bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequest("POST", c.webhook, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		zap.S().Panic("Unable to post the webhook: ", err)
 		return err
@@ -118,10 +141,10 @@ func webhookPOST(tag string, image string, repo string, webhook string, repoImag
 	req.Header.Add("Event-Promoter-Checker-Com", "webhook")
 
 	// Add a secret in the webhook so you can verify it in the EventListener
-	req.Header.Add("X-Secret-Token", item.WebhookSecret)
+	req.Header.Add("X-Secret-Token", c.item.WebhookSecret)
 
 	start := time.Now()
-	res, err := client.Do(req)
+	res, err := c.client.Do(req)
 
 	if err != nil {
 		return err
@@ -138,7 +161,7 @@ func webhookPOST(tag string, image string, repo string, webhook string, repoImag
 	}
 
 	duration := time.Since(start)
-	HistWebhook.WithLabelValues(repoImage).Observe(duration.Seconds())
+	HistWebhook.WithLabelValues(c.repoImage).Observe(duration.Seconds())
 
 	// No need to do a marshall stuff. Just a pain to maintain the different webhooks, just want output for logs.
 	zap.S().Infof("Output from webhook: %s", string(body))
@@ -153,9 +176,10 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 		webhook := item.Containers[i].Webhook
 		image := item.Containers[i].Image
 		repo := item.Containers[i].Repo
+		config := newConfig(image, repo, webhook, "", item, client, service)
 		zap.S().Debugf("Config to check: ", webhook, image, repo)
 
-		tag, err := requestArtData(image, repo, item, client)
+		tag, err := config.requestArtData()
 		if err != nil {
 			zap.S().DPanic("Unable to get data from artifactory: ", err)
 		}
@@ -168,7 +192,7 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 
 		repoImage := repo + "/" + image
 
-		// Store all the existing tags in the memDBgolangci-lint
+		// Store all the existing tags in the memDB
 		err = service.Store(repoImage, repo, image, slicedTags)
 		if err != nil {
 			zap.S().DPanic("Unable to store our data")
@@ -179,8 +203,8 @@ func InitialRunner(item *Items, client *http.Client, service RedirectRepository)
 }
 
 // requestArtData talks to repo storage on a specific endpoints and check what tags exist
-func requestArtData(image string, repo string, item *Items, client *http.Client) (*Tags, error) {
-	fulURL := item.ArtifactoryURL + "/api/storage/" + repo + "/" + image
+func (c *config) requestArtData() (*Tags, error) {
+	fulURL := c.item.ArtifactoryURL + "/api/storage/" + c.repo + "/" + c.image
 
 	req, err := http.NewRequest("GET", fulURL, nil)
 	if err != nil {
@@ -188,17 +212,17 @@ func requestArtData(image string, repo string, item *Items, client *http.Client)
 	}
 
 	// Depending on config use BasicAuth, header or nothing
-	if item.ArtifactoryUSER != "" && item.ArtifactoryAPIkey != "" {
-		req.SetBasicAuth(item.ArtifactoryUSER, item.ArtifactoryAPIkey)
-	} else if item.ArtifactoryAPIkey != "" {
-		req.Header.Add("X-JFrog-Art-Api", item.ArtifactoryAPIkey)
+	if c.item.ArtifactoryUSER != "" && c.item.ArtifactoryAPIkey != "" {
+		req.SetBasicAuth(c.item.ArtifactoryUSER, c.item.ArtifactoryAPIkey)
+	} else if c.item.ArtifactoryAPIkey != "" {
+		req.Header.Add("X-JFrog-Art-Api", c.item.ArtifactoryAPIkey)
 	}
 
 	// histogram timer start
 	start := time.Now()
 
 	// Perform GET to URI
-	res, err := client.Do(req)
+	res, err := c.client.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -223,7 +247,7 @@ func requestArtData(image string, repo string, item *Items, client *http.Client)
 
 	// calculate the duration since the timer started & add to the histogram
 	duration := time.Since(start)
-	HistArtifactory.WithLabelValues(repo + image).Observe(duration.Seconds())
+	HistArtifactory.WithLabelValues(c.repo + c.image).Observe(duration.Seconds())
 
 	return &tag, nil
 }
