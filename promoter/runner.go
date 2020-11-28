@@ -38,7 +38,7 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 				// Go through all the tags
 				for f := range tag.Children {
 
-					err = Runner(tag.Children[f].URI, image, repo, webhook, item, client, service)
+					err = runner(tag.Children[f].URI, image, repo, webhook, item, client, service)
 					// TODO still needs better error handeling, should i panic here? Should probably do it later...
 					if err != nil {
 						panic(err)
@@ -54,7 +54,7 @@ func MainRunner(ctx context.Context, item *Items, client *http.Client, service R
 }
 
 // Runner the main for loop of promoterChecker
-func Runner(tag string, image string, repo string, webhook string, item *Items, client *http.Client, service RedirectRepository) error {
+func runner(tag string, image string, repo string, webhook string, item *Items, client *http.Client, service RedirectRepository) error {
 	repoImage := repo + "/" + image
 
 	// Shorter to write realTag then tag.Children[f].URI
