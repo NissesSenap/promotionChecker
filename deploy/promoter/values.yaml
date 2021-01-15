@@ -6,7 +6,7 @@ image:
   repository: quay.io/nissessenap/promotionchecker
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v0.3.0"
+  tag: "v0.4.0"
 
 config:
   artifactoryURL: http://test-promotion-test-promotion-checker:8081

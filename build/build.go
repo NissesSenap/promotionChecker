@@ -1,6 +1,6 @@
 package build
 
 var (
-	Version   string = "v0.3.0"
-	BuildDate string = "2020-11-04"
+	Version   string = "v0.4.0"
+	BuildDate string = "2021-01-15"
 )
